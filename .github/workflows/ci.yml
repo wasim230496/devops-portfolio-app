@@ -1,4 +1,4 @@
-name: DevOps Project 1 CI
+name: DevOps Portfolio Pipeline
 
 on:
   push:
@@ -7,9 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  test-and-build:
+  continuous-integration:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -26,6 +25,36 @@ jobs:
       - name: Run Unit Tests Local
         run: npm test
 
-      - name: Build Docker Production Image
+  continuous-delivery:
+    needs: continuous-integration
+    # Only deploy if the tests passed and code is pushed to the main branch
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets::AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets::AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets::AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag, and Push Production Image to AWS ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: devops-portfolio-app
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build --target production -t devops-portfolio-app:latest .
+          # Build the production multi-stage image targeting our final output
+          docker build --target production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+
+          # Push both the unique commit SHA version and the moving 'latest' tag
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
