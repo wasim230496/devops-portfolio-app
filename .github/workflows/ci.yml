@@ -1,0 +1,31 @@
+name: DevOps Project 1 CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-index: "20"
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Unit Tests Local
+        run: npm test
+
+      - name: Build Docker Production Image
+        run: |
+          docker build --target production -t devops-portfolio-app:latest .
